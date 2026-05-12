@@ -20,7 +20,7 @@ import {
 } from "react-native";
 
 const { height: screenHeight } = Dimensions.get("window");
-const DEFAULT_SERVER_URL = "http://192.168.1.245:8765";
+const DEFAULT_SERVER_URL = "https://unsecured-commute-lyricism.ngrok-free.dev";
 const FAVORITES_STORAGE_KEY = "favoriteVideos";
 const SERVER_URL_STORAGE_KEY = "serverUrl";
 const ADD_PASSWORD_STORAGE_KEY = "addPassword";
