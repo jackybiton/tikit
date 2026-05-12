@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "TikTok User Feed",
+    "slug": "tiktok",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#05070d",
+      "resizeMode": "contain"
+    },
+    "android": {
+      "package": "com.local.tiktokuserfeed"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0297c163-4bca-4d14-a2a5-c0d04e9d2085"
+      }
+    },
+    "owner": "yaakov32",
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
