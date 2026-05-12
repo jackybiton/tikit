@@ -1,0 +1,6 @@
+node_modules/
+.expo/
+dist/
+build/
+eas-build.log
+eas-build.decoded.log

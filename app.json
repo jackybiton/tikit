@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "TikTok User Feed",
+    "slug": "tiktok-user-feed",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "com.local.tiktokuserfeed"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "de9352b3-71ac-43f1-8253-20282b5f9766"
+      }
+    },
+    "owner": "yaakov32",
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}

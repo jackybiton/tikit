@@ -1,0 +1,26 @@
+{
+  "name": "tiktok-user-feed",
+  "version": "1.0.0",
+  "private": true,
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "phone": "expo start --host lan",
+    "android": "expo start --android",
+    "web": "expo start --web",
+    "build:apk": "eas-cli build -p android --profile preview"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^14.0.4",
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "expo": "~51.0.39",
+    "expo-font": "~12.0.10",
+    "expo-status-bar": "~1.12.1",
+    "react": "18.2.0",
+    "react-native": "0.74.5",
+    "react-native-webview": "13.8.6"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0"
+  }
+}
