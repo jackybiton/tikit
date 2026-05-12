@@ -23,6 +23,7 @@ const { height: screenHeight } = Dimensions.get("window");
 const DEFAULT_SERVER_URL = "http://192.168.1.245:8765";
 const FAVORITES_STORAGE_KEY = "favoriteVideos";
 const SERVER_URL_STORAGE_KEY = "serverUrl";
+const ADD_PASSWORD_STORAGE_KEY = "addPassword";
 
 function cleanBaseUrl(value) {
   return value.trim().replace(/\/+$/, "");
@@ -38,7 +39,7 @@ function videoKey(video) {
 
 function FeedItem({ isActive, item, height, isFavorite, onDeleteVideo, onToggleFavorite }) {
   return (
-    <View style={[styles.feedItem, { height }]}> 
+    <View style={[styles.feedItem, { height }]}>
       <Video
         source={{ uri: item.videoUrl || item.url }}
         style={styles.video}
@@ -78,6 +79,7 @@ function FeedItem({ isActive, item, height, isFavorite, onDeleteVideo, onToggleF
 
 export default function App() {
   const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER_URL);
+  const [addPassword, setAddPassword] = useState("");
   const [username, setUsername] = useState("");
   const [accounts, setAccounts] = useState([]);
   const [videos, setVideos] = useState([]);
@@ -90,7 +92,7 @@ export default function App() {
   const listRef = useRef(null);
 
   const apiBase = useMemo(() => cleanBaseUrl(serverUrl), [serverUrl]);
-  const itemHeight = settingsOpen ? Math.max(screenHeight - 260, 420) : screenHeight;
+  const itemHeight = settingsOpen ? Math.max(screenHeight - 310, 360) : screenHeight;
   const favoriteList = useMemo(() => Object.values(favoriteVideos), [favoriteVideos]);
   const visibleVideos = feedMode === "favorites" ? favoriteList : videos;
 
@@ -161,6 +163,14 @@ export default function App() {
         }
       })
       .catch(() => {});
+
+    AsyncStorage.getItem(ADD_PASSWORD_STORAGE_KEY)
+      .then((value) => {
+        if (value) {
+          setAddPassword(value);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const addAccount = async () => {
@@ -173,7 +183,7 @@ export default function App() {
     try {
       const data = await requestJson("/accounts", {
         method: "POST",
-        body: JSON.stringify({ username: nextUsername })
+        body: JSON.stringify({ username: nextUsername, password: addPassword })
       });
 
       setAccounts(data.accounts || []);
@@ -271,6 +281,15 @@ export default function App() {
     }
   };
 
+  const updateAddPassword = async (value) => {
+    setAddPassword(value);
+
+    try {
+      await AsyncStorage.setItem(ADD_PASSWORD_STORAGE_KEY, value);
+    } catch {
+    }
+  };
+
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
@@ -299,6 +318,17 @@ export default function App() {
             placeholder="API server URL"
             placeholderTextColor="#8d96a8"
             style={styles.input}
+          />
+
+          <TextInput
+            value={addPassword}
+            onChangeText={updateAddPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Password for adding users"
+            placeholderTextColor="#8d96a8"
+            secureTextEntry
+            style={[styles.input, styles.passwordInput]}
           />
 
           <View style={styles.addRow}>
@@ -396,212 +426,37 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: "#05070d"
-  },
-  settings: {
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 10,
-    backgroundColor: "#0b0f1a",
-    borderBottomColor: "#222838",
-    borderBottomWidth: 1
-  },
-  topRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10
-  },
-  title: {
-    color: "#ffffff",
-    fontSize: 24,
-    fontWeight: "800"
-  },
-  subtitle: {
-    color: "#9da6b8",
-    fontSize: 13,
-    marginTop: 2
-  },
-  iconButton: {
-    alignItems: "center",
-    backgroundColor: "#202637",
-    borderRadius: 8,
-    height: 42,
-    justifyContent: "center",
-    width: 42
-  },
-  input: {
-    backgroundColor: "#151b29",
-    borderColor: "#2d3548",
-    borderRadius: 8,
-    borderWidth: 1,
-    color: "#ffffff",
-    fontSize: 14,
-    height: 42,
-    paddingHorizontal: 12
-  },
-  addRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 8
-  },
-  accountInput: {
-    flex: 1
-  },
-  addButton: {
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 8,
-    height: 42,
-    justifyContent: "center",
-    width: 48
-  },
-  accountChips: {
-    gap: 8,
-    paddingTop: 10
-  },
-  chip: {
-    alignItems: "center",
-    backgroundColor: "#1b2231",
-    borderColor: "#323a4e",
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8
-  },
-  chipText: {
-    color: "#eef2ff",
-    fontSize: 13,
-    fontWeight: "700"
-  },
-  modeTabs: {
-    backgroundColor: "#151b29",
-    borderColor: "#2d3548",
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 6,
-    marginTop: 10,
-    padding: 4
-  },
-  modeTab: {
-    alignItems: "center",
-    borderRadius: 6,
-    flex: 1,
-    flexDirection: "row",
-    gap: 6,
-    height: 36,
-    justifyContent: "center"
-  },
-  modeTabActive: {
-    backgroundColor: "#ffffff"
-  },
-  modeTabText: {
-    color: "#d7ddec",
-    fontSize: 13,
-    fontWeight: "800"
-  },
-  modeTabTextActive: {
-    color: "#05070d"
-  },
-  settingsToggle: {
-    alignItems: "center",
-    alignSelf: "center",
-    backgroundColor: "#1f2636",
-    borderRadius: 8,
-    height: 36,
-    justifyContent: "center",
-    position: "absolute",
-    right: 12,
-    top: 12,
-    width: 42,
-    zIndex: 3
-  },
-  feedItem: {
-    backgroundColor: "#05070d"
-  },
-  video: {
-    backgroundColor: "#05070d",
-    flex: 1
-  },
-  webLoading: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    backgroundColor: "#05070d",
-    justifyContent: "center"
-  },
-  videoMeta: {
-    bottom: 26,
-    left: 16,
-    position: "absolute",
-    right: 72
-  },
-  username: {
-    color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 7,
-    textShadowColor: "rgba(0,0,0,0.7)",
-    textShadowRadius: 8
-  },
-  description: {
-    color: "#ffffff",
-    fontSize: 14,
-    lineHeight: 19,
-    textShadowColor: "rgba(0,0,0,0.78)",
-    textShadowRadius: 8
-  },
-  actionRail: {
-    alignItems: "center",
-    bottom: 32,
-    position: "absolute",
-    right: 14
-  },
-  railButton: {
-    alignItems: "center",
-    backgroundColor: "rgba(10, 12, 18, 0.58)",
-    borderColor: "rgba(255,255,255,0.18)",
-    borderRadius: 8,
-    borderWidth: 1,
-    height: 48,
-    justifyContent: "center",
-    width: 48
-  },
-  favoriteButton: {
-    backgroundColor: "rgba(255, 59, 99, 0.16)",
-    borderColor: "rgba(255, 59, 99, 0.45)"
-  },
-  deleteButton: {
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
-    marginTop: 14
-  },
-  railLabel: {
-    color: "#ffffff",
-    fontSize: 11,
-    fontWeight: "800",
-    marginTop: 6,
-    textShadowColor: "rgba(0,0,0,0.7)",
-    textShadowRadius: 5
-  },
-  empty: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 34
-  },
-  emptyTitle: {
-    color: "#ffffff",
-    fontSize: 22,
-    fontWeight: "800",
-    marginTop: 12
-  },
-  emptyText: {
-    color: "#9da6b8",
-    fontSize: 15,
-    marginTop: 6,
-    textAlign: "center"
-  }
+  screen: { flex: 1, backgroundColor: "#05070d" },
+  settings: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, backgroundColor: "#0b0f1a", borderBottomColor: "#222838", borderBottomWidth: 1 },
+  topRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
+  title: { color: "#ffffff", fontSize: 24, fontWeight: "800" },
+  subtitle: { color: "#9da6b8", fontSize: 13, marginTop: 2 },
+  iconButton: { alignItems: "center", backgroundColor: "#202637", borderRadius: 8, height: 42, justifyContent: "center", width: 42 },
+  input: { backgroundColor: "#151b29", borderColor: "#2d3548", borderRadius: 8, borderWidth: 1, color: "#ffffff", fontSize: 14, height: 42, paddingHorizontal: 12 },
+  addRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  passwordInput: { marginTop: 8 },
+  accountInput: { flex: 1 },
+  addButton: { alignItems: "center", backgroundColor: "#ffffff", borderRadius: 8, height: 42, justifyContent: "center", width: 48 },
+  accountChips: { gap: 8, paddingTop: 10 },
+  chip: { alignItems: "center", backgroundColor: "#1b2231", borderColor: "#323a4e", borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 6, paddingHorizontal: 10, paddingVertical: 8 },
+  chipText: { color: "#eef2ff", fontSize: 13, fontWeight: "700" },
+  modeTabs: { backgroundColor: "#151b29", borderColor: "#2d3548", borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 6, marginTop: 10, padding: 4 },
+  modeTab: { alignItems: "center", borderRadius: 6, flex: 1, flexDirection: "row", gap: 6, height: 36, justifyContent: "center" },
+  modeTabActive: { backgroundColor: "#ffffff" },
+  modeTabText: { color: "#d7ddec", fontSize: 13, fontWeight: "800" },
+  modeTabTextActive: { color: "#05070d" },
+  settingsToggle: { alignItems: "center", alignSelf: "center", backgroundColor: "#1f2636", borderRadius: 8, height: 36, justifyContent: "center", position: "absolute", right: 12, top: 12, width: 42, zIndex: 3 },
+  feedItem: { backgroundColor: "#05070d" },
+  video: { backgroundColor: "#05070d", flex: 1 },
+  videoMeta: { bottom: 26, left: 16, position: "absolute", right: 72 },
+  username: { color: "#ffffff", fontSize: 18, fontWeight: "800", marginBottom: 7, textShadowColor: "rgba(0,0,0,0.7)", textShadowRadius: 8 },
+  description: { color: "#ffffff", fontSize: 14, lineHeight: 19, textShadowColor: "rgba(0,0,0,0.78)", textShadowRadius: 8 },
+  actionRail: { alignItems: "center", bottom: 32, position: "absolute", right: 14 },
+  railButton: { alignItems: "center", backgroundColor: "rgba(10, 12, 18, 0.58)", borderColor: "rgba(255,255,255,0.18)", borderRadius: 8, borderWidth: 1, height: 48, justifyContent: "center", width: 48 },
+  favoriteButton: { backgroundColor: "rgba(255, 59, 99, 0.16)", borderColor: "rgba(255, 59, 99, 0.45)" },
+  deleteButton: { backgroundColor: "rgba(255, 255, 255, 0.12)", marginTop: 14 },
+  railLabel: { color: "#ffffff", fontSize: 11, fontWeight: "800", marginTop: 6, textShadowColor: "rgba(0,0,0,0.7)", textShadowRadius: 5 },
+  empty: { alignItems: "center", justifyContent: "center", paddingHorizontal: 34 },
+  emptyTitle: { color: "#ffffff", fontSize: 22, fontWeight: "800", marginTop: 12 },
+  emptyText: { color: "#9da6b8", fontSize: 15, marginTop: 6, textAlign: "center" }
 });
