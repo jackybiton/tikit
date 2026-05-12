@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TikTok User Feed",
-    "slug": "tiktok-user-feed",
+    "slug": "tiktok",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
