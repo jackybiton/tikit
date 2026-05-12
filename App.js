@@ -36,14 +36,14 @@ function videoKey(video) {
   return `${video.username}:${video.id}`;
 }
 
-function FeedItem({ item, height, isFavorite, onDeleteVideo, onToggleFavorite }) {
+function FeedItem({ isActive, item, height, isFavorite, onDeleteVideo, onToggleFavorite }) {
   return (
     <View style={[styles.feedItem, { height }]}> 
       <Video
         source={{ uri: item.videoUrl || item.url }}
         style={styles.video}
         resizeMode={ResizeMode.COVER}
-        shouldPlay
+        shouldPlay={isActive}
         isLooping
         useNativeControls={false}
       />
@@ -86,6 +86,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(true);
   const [feedMode, setFeedMode] = useState("all");
   const [favoriteVideos, setFavoriteVideos] = useState({});
+  const [activeVideoKey, setActiveVideoKey] = useState(null);
   const listRef = useRef(null);
 
   const apiBase = useMemo(() => cleanBaseUrl(serverUrl), [serverUrl]);
@@ -122,8 +123,9 @@ export default function App() {
     }
 
     try {
-      const data = await requestJson("/feed?limit=10");
+      const data = await requestJson("/feed?limit=4");
       setVideos(data.videos || []);
+      setActiveVideoKey((currentKey) => currentKey || (data.videos?.[0] ? videoKey(data.videos[0]) : null));
 
       if (data.errors?.length) {
         Alert.alert("Some accounts failed", data.errors.map((entry) => `@${entry.username}: ${entry.error}`).join("\n\n"));
@@ -137,19 +139,29 @@ export default function App() {
   }, [requestJson]);
 
   useEffect(() => {
-    AsyncStorage.getItem(FAVORITES_STORAGE_KEY)
-      .then((value) => value && setFavoriteVideos(JSON.parse(value)))
-      .catch(() => {});
+    loadAccounts().catch(() => {});
+    loadFeed({ quiet: true }).catch(() => {});
+  }, [loadAccounts, loadFeed]);
 
-    AsyncStorage.getItem(SERVER_URL_STORAGE_KEY)
-      .then((value) => value && setServerUrl(value))
+  useEffect(() => {
+    AsyncStorage.getItem(FAVORITES_STORAGE_KEY)
+      .then((value) => {
+        if (value) {
+          setFavoriteVideos(JSON.parse(value));
+        }
+      })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    loadAccounts().catch(() => {});
-    loadFeed({ quiet: true }).catch(() => {});
-  }, [loadAccounts, loadFeed]);
+    AsyncStorage.getItem(SERVER_URL_STORAGE_KEY)
+      .then((value) => {
+        if (value) {
+          setServerUrl(value);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const addAccount = async () => {
     const nextUsername = username.trim();
@@ -225,17 +237,38 @@ export default function App() {
     }
 
     setFavoriteVideos(nextFavorites);
-    await AsyncStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(nextFavorites));
+
+    try {
+      await AsyncStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(nextFavorites));
+    } catch (error) {
+      Alert.alert("Favorites error", compactError(error));
+    }
   };
 
   const setModeAndResetScroll = (mode) => {
     setFeedMode(mode);
+    const firstVideo = mode === "favorites" ? favoriteList[0] : videos[0];
+    setActiveVideoKey(firstVideo ? videoKey(firstVideo) : null);
     requestAnimationFrame(() => listRef.current?.scrollToOffset({ offset: 0, animated: false }));
   };
 
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    const visibleItem = viewableItems.find((entry) => entry.isViewable)?.item;
+
+    if (visibleItem) {
+      setActiveVideoKey(videoKey(visibleItem));
+    }
+  }).current;
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 70 }).current;
+
   const updateServerUrl = async (value) => {
     setServerUrl(value);
-    await AsyncStorage.setItem(SERVER_URL_STORAGE_KEY, value).catch(() => {});
+
+    try {
+      await AsyncStorage.setItem(SERVER_URL_STORAGE_KEY, value);
+    } catch {
+    }
   };
 
   return (
@@ -247,8 +280,11 @@ export default function App() {
           <View style={styles.topRow}>
             <View>
               <Text style={styles.title}>User Feed</Text>
-              <Text style={styles.subtitle}>{videos.length} videos from {accounts.length} accounts - {favoriteList.length} favorites</Text>
+              <Text style={styles.subtitle}>
+                {videos.length} videos from {accounts.length} accounts - {favoriteList.length} favorites
+              </Text>
             </View>
+
             <Pressable style={styles.iconButton} onPress={() => loadFeed()}>
               {loading ? <ActivityIndicator color="#ffffff" /> : <Ionicons name="sync" size={21} color="#ffffff" />}
             </Pressable>
@@ -296,11 +332,17 @@ export default function App() {
           />
 
           <View style={styles.modeTabs}>
-            <Pressable style={[styles.modeTab, feedMode === "all" && styles.modeTabActive]} onPress={() => setModeAndResetScroll("all")}>
+            <Pressable
+              style={[styles.modeTab, feedMode === "all" && styles.modeTabActive]}
+              onPress={() => setModeAndResetScroll("all")}
+            >
               <Ionicons name="play-circle-outline" size={17} color={feedMode === "all" ? "#05070d" : "#d7ddec"} />
               <Text style={[styles.modeTabText, feedMode === "all" && styles.modeTabTextActive]}>All</Text>
             </Pressable>
-            <Pressable style={[styles.modeTab, feedMode === "favorites" && styles.modeTabActive]} onPress={() => setModeAndResetScroll("favorites")}>
+            <Pressable
+              style={[styles.modeTab, feedMode === "favorites" && styles.modeTabActive]}
+              onPress={() => setModeAndResetScroll("favorites")}
+            >
               <Ionicons name="heart" size={17} color={feedMode === "favorites" ? "#05070d" : "#d7ddec"} />
               <Text style={[styles.modeTabText, feedMode === "favorites" && styles.modeTabTextActive]}>Favorites</Text>
             </Pressable>
@@ -320,6 +362,7 @@ export default function App() {
           <FeedItem
             item={item}
             height={itemHeight}
+            isActive={activeVideoKey === videoKey(item)}
             isFavorite={Boolean(favoriteVideos[videoKey(item)])}
             onDeleteVideo={deleteVideo}
             onToggleFavorite={toggleFavorite}
@@ -328,15 +371,21 @@ export default function App() {
         pagingEnabled
         snapToInterval={itemHeight}
         decelerationRate="fast"
+        onViewableItemsChanged={onViewableItemsChanged}
         showsVerticalScrollIndicator={false}
+        viewabilityConfig={viewabilityConfig}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshFeed} tintColor="#ffffff" />}
         ListEmptyComponent={
-          <View style={[styles.empty, { height: itemHeight }]}> 
+          <View style={[styles.empty, { height: itemHeight }]}>
             {loading ? <ActivityIndicator color="#ffffff" /> : (
               <>
                 <Ionicons name="videocam-outline" size={42} color="#ffffff" />
-                <Text style={styles.emptyTitle}>{feedMode === "favorites" ? "No favorites yet" : "No videos yet"}</Text>
-                <Text style={styles.emptyText}>{feedMode === "favorites" ? "Tap the heart on videos you want to save." : "Add TikTok users and pull to refresh."}</Text>
+                <Text style={styles.emptyTitle}>
+                  {feedMode === "favorites" ? "No favorites yet" : "No videos yet"}
+                </Text>
+                <Text style={styles.emptyText}>
+                  {feedMode === "favorites" ? "Tap the heart on videos you want to save." : "Add TikTok users and pull to refresh."}
+                </Text>
               </>
             )}
           </View>
@@ -347,36 +396,212 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#05070d" },
-  settings: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10, backgroundColor: "#0b0f1a", borderBottomColor: "#222838", borderBottomWidth: 1 },
-  topRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
-  title: { color: "#ffffff", fontSize: 24, fontWeight: "800" },
-  subtitle: { color: "#9da6b8", fontSize: 13, marginTop: 2 },
-  iconButton: { alignItems: "center", backgroundColor: "#202637", borderRadius: 8, height: 42, justifyContent: "center", width: 42 },
-  input: { backgroundColor: "#151b29", borderColor: "#2d3548", borderRadius: 8, borderWidth: 1, color: "#ffffff", fontSize: 14, height: 42, paddingHorizontal: 12 },
-  addRow: { flexDirection: "row", gap: 8, marginTop: 8 },
-  accountInput: { flex: 1 },
-  addButton: { alignItems: "center", backgroundColor: "#ffffff", borderRadius: 8, height: 42, justifyContent: "center", width: 48 },
-  accountChips: { gap: 8, paddingTop: 10 },
-  chip: { alignItems: "center", backgroundColor: "#1b2231", borderColor: "#323a4e", borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 6, paddingHorizontal: 10, paddingVertical: 8 },
-  chipText: { color: "#eef2ff", fontSize: 13, fontWeight: "700" },
-  modeTabs: { backgroundColor: "#151b29", borderColor: "#2d3548", borderRadius: 8, borderWidth: 1, flexDirection: "row", gap: 6, marginTop: 10, padding: 4 },
-  modeTab: { alignItems: "center", borderRadius: 6, flex: 1, flexDirection: "row", gap: 6, height: 36, justifyContent: "center" },
-  modeTabActive: { backgroundColor: "#ffffff" },
-  modeTabText: { color: "#d7ddec", fontSize: 13, fontWeight: "800" },
-  modeTabTextActive: { color: "#05070d" },
-  settingsToggle: { alignItems: "center", alignSelf: "center", backgroundColor: "#1f2636", borderRadius: 8, height: 36, justifyContent: "center", position: "absolute", right: 12, top: 12, width: 42, zIndex: 3 },
-  feedItem: { backgroundColor: "#05070d" },
-  video: { backgroundColor: "#05070d", flex: 1 },
-  videoMeta: { bottom: 26, left: 16, position: "absolute", right: 72 },
-  username: { color: "#ffffff", fontSize: 18, fontWeight: "800", marginBottom: 7, textShadowColor: "rgba(0,0,0,0.7)", textShadowRadius: 8 },
-  description: { color: "#ffffff", fontSize: 14, lineHeight: 19, textShadowColor: "rgba(0,0,0,0.78)", textShadowRadius: 8 },
-  actionRail: { alignItems: "center", bottom: 32, position: "absolute", right: 14 },
-  railButton: { alignItems: "center", backgroundColor: "rgba(10, 12, 18, 0.58)", borderColor: "rgba(255,255,255,0.18)", borderRadius: 8, borderWidth: 1, height: 48, justifyContent: "center", width: 48 },
-  favoriteButton: { backgroundColor: "rgba(255, 59, 99, 0.16)", borderColor: "rgba(255, 59, 99, 0.45)" },
-  deleteButton: { backgroundColor: "rgba(255, 255, 255, 0.12)", marginTop: 14 },
-  railLabel: { color: "#ffffff", fontSize: 11, fontWeight: "800", marginTop: 6, textShadowColor: "rgba(0,0,0,0.7)", textShadowRadius: 5 },
-  empty: { alignItems: "center", justifyContent: "center", paddingHorizontal: 34 },
-  emptyTitle: { color: "#ffffff", fontSize: 22, fontWeight: "800", marginTop: 12 },
-  emptyText: { color: "#9da6b8", fontSize: 15, marginTop: 6, textAlign: "center" }
+  screen: {
+    flex: 1,
+    backgroundColor: "#05070d"
+  },
+  settings: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
+    backgroundColor: "#0b0f1a",
+    borderBottomColor: "#222838",
+    borderBottomWidth: 1
+  },
+  topRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10
+  },
+  title: {
+    color: "#ffffff",
+    fontSize: 24,
+    fontWeight: "800"
+  },
+  subtitle: {
+    color: "#9da6b8",
+    fontSize: 13,
+    marginTop: 2
+  },
+  iconButton: {
+    alignItems: "center",
+    backgroundColor: "#202637",
+    borderRadius: 8,
+    height: 42,
+    justifyContent: "center",
+    width: 42
+  },
+  input: {
+    backgroundColor: "#151b29",
+    borderColor: "#2d3548",
+    borderRadius: 8,
+    borderWidth: 1,
+    color: "#ffffff",
+    fontSize: 14,
+    height: 42,
+    paddingHorizontal: 12
+  },
+  addRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8
+  },
+  accountInput: {
+    flex: 1
+  },
+  addButton: {
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    height: 42,
+    justifyContent: "center",
+    width: 48
+  },
+  accountChips: {
+    gap: 8,
+    paddingTop: 10
+  },
+  chip: {
+    alignItems: "center",
+    backgroundColor: "#1b2231",
+    borderColor: "#323a4e",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  chipText: {
+    color: "#eef2ff",
+    fontSize: 13,
+    fontWeight: "700"
+  },
+  modeTabs: {
+    backgroundColor: "#151b29",
+    borderColor: "#2d3548",
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 10,
+    padding: 4
+  },
+  modeTab: {
+    alignItems: "center",
+    borderRadius: 6,
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+    height: 36,
+    justifyContent: "center"
+  },
+  modeTabActive: {
+    backgroundColor: "#ffffff"
+  },
+  modeTabText: {
+    color: "#d7ddec",
+    fontSize: 13,
+    fontWeight: "800"
+  },
+  modeTabTextActive: {
+    color: "#05070d"
+  },
+  settingsToggle: {
+    alignItems: "center",
+    alignSelf: "center",
+    backgroundColor: "#1f2636",
+    borderRadius: 8,
+    height: 36,
+    justifyContent: "center",
+    position: "absolute",
+    right: 12,
+    top: 12,
+    width: 42,
+    zIndex: 3
+  },
+  feedItem: {
+    backgroundColor: "#05070d"
+  },
+  video: {
+    backgroundColor: "#05070d",
+    flex: 1
+  },
+  webLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    backgroundColor: "#05070d",
+    justifyContent: "center"
+  },
+  videoMeta: {
+    bottom: 26,
+    left: 16,
+    position: "absolute",
+    right: 72
+  },
+  username: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 7,
+    textShadowColor: "rgba(0,0,0,0.7)",
+    textShadowRadius: 8
+  },
+  description: {
+    color: "#ffffff",
+    fontSize: 14,
+    lineHeight: 19,
+    textShadowColor: "rgba(0,0,0,0.78)",
+    textShadowRadius: 8
+  },
+  actionRail: {
+    alignItems: "center",
+    bottom: 32,
+    position: "absolute",
+    right: 14
+  },
+  railButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(10, 12, 18, 0.58)",
+    borderColor: "rgba(255,255,255,0.18)",
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: "center",
+    width: 48
+  },
+  favoriteButton: {
+    backgroundColor: "rgba(255, 59, 99, 0.16)",
+    borderColor: "rgba(255, 59, 99, 0.45)"
+  },
+  deleteButton: {
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    marginTop: 14
+  },
+  railLabel: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 6,
+    textShadowColor: "rgba(0,0,0,0.7)",
+    textShadowRadius: 5
+  },
+  empty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 34
+  },
+  emptyTitle: {
+    color: "#ffffff",
+    fontSize: 22,
+    fontWeight: "800",
+    marginTop: 12
+  },
+  emptyText: {
+    color: "#9da6b8",
+    fontSize: 15,
+    marginTop: 6,
+    textAlign: "center"
+  }
 });
