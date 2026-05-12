@@ -36,7 +36,7 @@ function videoKey(video) {
   return `${video.username}:${video.id}`;
 }
 
-function FeedItem({ item, height, isFavorite, onToggleFavorite }) {
+function FeedItem({ item, height, isFavorite, onDeleteVideo, onToggleFavorite }) {
   return (
     <View style={[styles.feedItem, { height }]}> 
       <Video
@@ -62,6 +62,15 @@ function FeedItem({ item, height, isFavorite, onToggleFavorite }) {
           <Ionicons name={isFavorite ? "heart" : "heart-outline"} size={30} color={isFavorite ? "#ff3b63" : "#ffffff"} />
         </Pressable>
         <Text style={styles.railLabel}>Favorite</Text>
+
+        <Pressable
+          accessibilityLabel="Delete video from server"
+          style={[styles.railButton, styles.deleteButton]}
+          onPress={() => onDeleteVideo(item)}
+        >
+          <Ionicons name="trash-outline" size={27} color="#ffffff" />
+        </Pressable>
+        <Text style={styles.railLabel}>Delete</Text>
       </View>
     </View>
   );
@@ -173,6 +182,33 @@ export default function App() {
     }
   };
 
+  const deleteVideo = async (video) => {
+    Alert.alert(
+      "Delete video",
+      "Remove this video from the server and hide it from the feed?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await requestJson(`/videos?id=${encodeURIComponent(video.id)}`, { method: "DELETE" });
+              setVideos((currentVideos) => currentVideos.filter((item) => item.id !== video.id));
+
+              const nextFavorites = { ...favoriteVideos };
+              delete nextFavorites[videoKey(video)];
+              setFavoriteVideos(nextFavorites);
+              await AsyncStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(nextFavorites));
+            } catch (error) {
+              Alert.alert("Could not delete video", compactError(error));
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const refreshFeed = async () => {
     setRefreshing(true);
     await loadFeed({ quiet: true });
@@ -281,7 +317,13 @@ export default function App() {
         data={visibleVideos}
         keyExtractor={(item) => item.id + item.username}
         renderItem={({ item }) => (
-          <FeedItem item={item} height={itemHeight} isFavorite={Boolean(favoriteVideos[videoKey(item)])} onToggleFavorite={toggleFavorite} />
+          <FeedItem
+            item={item}
+            height={itemHeight}
+            isFavorite={Boolean(favoriteVideos[videoKey(item)])}
+            onDeleteVideo={deleteVideo}
+            onToggleFavorite={toggleFavorite}
+          />
         )}
         pagingEnabled
         snapToInterval={itemHeight}
@@ -332,6 +374,7 @@ const styles = StyleSheet.create({
   actionRail: { alignItems: "center", bottom: 32, position: "absolute", right: 14 },
   railButton: { alignItems: "center", backgroundColor: "rgba(10, 12, 18, 0.58)", borderColor: "rgba(255,255,255,0.18)", borderRadius: 8, borderWidth: 1, height: 48, justifyContent: "center", width: 48 },
   favoriteButton: { backgroundColor: "rgba(255, 59, 99, 0.16)", borderColor: "rgba(255, 59, 99, 0.45)" },
+  deleteButton: { backgroundColor: "rgba(255, 255, 255, 0.12)", marginTop: 14 },
   railLabel: { color: "#ffffff", fontSize: 11, fontWeight: "800", marginTop: 6, textShadowColor: "rgba(0,0,0,0.7)", textShadowRadius: 5 },
   empty: { alignItems: "center", justifyContent: "center", paddingHorizontal: 34 },
   emptyTitle: { color: "#ffffff", fontSize: 22, fontWeight: "800", marginTop: 12 },
