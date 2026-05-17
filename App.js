@@ -26,7 +26,17 @@ const SERVER_URL_STORAGE_KEY = "serverUrl";
 const ADD_PASSWORD_STORAGE_KEY = "addPassword";
 
 function cleanBaseUrl(value) {
-  return value.trim().replace(/\/+$/, "");
+  const trimmed = value.trim().replace(/\/+$/, "");
+
+  if (!trimmed) {
+    return "";
+  }
+
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+
+  return trimmed;
 }
 
 function compactError(error) {
@@ -97,6 +107,10 @@ export default function App() {
   const visibleVideos = feedMode === "favorites" ? favoriteList : videos;
 
   const requestJson = useCallback(async (path, options = {}) => {
+    if (!apiBase) {
+      throw new Error("Missing API server URL");
+    }
+
     const response = await fetch(`${apiBase}${path}`, {
       headers: {
         "Content-Type": "application/json",
@@ -105,7 +119,15 @@ export default function App() {
       ...options
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data;
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      const preview = text.slice(0, 120).replace(/\s+/g, " ");
+      throw new Error(`Server did not return JSON. Check the API URL, ngrok tunnel, and server. Response: ${preview}`);
+    }
 
     if (!response.ok) {
       throw new Error(data.error || `HTTP ${response.status}`);
@@ -196,7 +218,13 @@ export default function App() {
 
   const removeAccount = async (account) => {
     try {
-      const data = await requestJson(`/accounts?username=${encodeURIComponent(account)}`, { method: "DELETE" });
+      const keepVideoIds = Object.values(favoriteVideos)
+        .filter((video) => video.username === account)
+        .map((video) => video.id);
+      const data = await requestJson(`/accounts?username=${encodeURIComponent(account)}`, {
+        method: "DELETE",
+        body: JSON.stringify({ keepVideoIds })
+      });
       setAccounts(data.accounts || []);
       await loadFeed({ quiet: true });
     } catch (error) {
@@ -448,6 +476,7 @@ const styles = StyleSheet.create({
   settingsToggle: { alignItems: "center", alignSelf: "center", backgroundColor: "#1f2636", borderRadius: 8, height: 36, justifyContent: "center", position: "absolute", right: 12, top: 12, width: 42, zIndex: 3 },
   feedItem: { backgroundColor: "#05070d" },
   video: { backgroundColor: "#05070d", flex: 1 },
+  webLoading: { ...StyleSheet.absoluteFillObject, alignItems: "center", backgroundColor: "#05070d", justifyContent: "center" },
   videoMeta: { bottom: 26, left: 16, position: "absolute", right: 72 },
   username: { color: "#ffffff", fontSize: 18, fontWeight: "800", marginBottom: 7, textShadowColor: "rgba(0,0,0,0.7)", textShadowRadius: 8 },
   description: { color: "#ffffff", fontSize: 14, lineHeight: 19, textShadowColor: "rgba(0,0,0,0.78)", textShadowRadius: 8 },
